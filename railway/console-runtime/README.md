@@ -1,13 +1,13 @@
 # Railway Console runtime-config compatibility
 
-This small image layer works around the pinned Fleetbase Console v0.7.63 bundle setting
-`APP.disableRuntimeConfig` to `true` unconditionally. That causes the Console to ignore
-`/fleetbase.config.json` and call API routes against the Console's own static web server.
+This small image layer ensures the pinned Fleetbase Console bundle enables runtime configuration.
+Depending on the base image build, the minified `APP.disableRuntimeConfig` flag may arrive as
+either true or false; the entrypoint enables it when needed and verifies it is enabled.
 
-At container startup the entrypoint flips only that bundled flag, recalculates both SRI hashes
-for the patched bundle, then calls the base image entrypoint. SRI remains enabled, and the base
-image continues to generate runtime config from Railway variables such as `API_HOST`,
-`API_NAMESPACE`, and SocketCluster settings.
+Afterward, it recalculates the bundle's SHA-256 and SHA-512 Subresource Integrity (SRI) hashes
+in `index.html`, so browsers continue to verify the modified JavaScript. It then calls the base
+image entrypoint, which writes `/fleetbase.config.json` from Railway variables such as
+`API_HOST`, `API_NAMESPACE`, and SocketCluster settings.
 
 The base wrapper image is pinned by digest. Update the digest and re-check the flag before
 upgrading the console.

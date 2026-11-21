@@ -3,18 +3,18 @@ set -eu
 
 ASSET_DIR=/usr/share/nginx/html/assets
 INDEX_FILE=/usr/share/nginx/html/index.html
-patched=0
+bundle_ready=0
 
-# In this pinned production bundle, !0 is minified JavaScript for true and !1 is false.
-# Fail closed if the upstream bundle changes so we never serve a console that silently
-# ignores its API host configuration.
+# The pinned console may ship with either value. Ensure runtime config is enabled,
+# then recalculate SRI so browsers continue verifying the modified bundle.
 for asset in "$ASSET_DIR"/@fleetbase/console-*.js; do
     [ -f "$asset" ] || continue
+
     if grep -q 'disableRuntimeConfig:!0' "$asset"; then
         sed -i 's/disableRuntimeConfig:!0/disableRuntimeConfig:!1/g' "$asset"
+    fi
 
-        # The HTML uses Subresource Integrity (SRI) for this bundle. Recalculate both hashes
-        # after the narrow patch so browsers accept the modified asset and still verify it.
+    if grep -q 'disableRuntimeConfig:!1' "$asset"; then
         hash256="$(openssl dgst -sha256 -binary "$asset" | openssl base64 -A)"
         hash512="$(openssl dgst -sha512 -binary "$asset" | openssl base64 -A)"
         asset_name="${asset##*/}"
@@ -23,12 +23,12 @@ for asset in "$ASSET_DIR"/@fleetbase/console-*.js; do
             printf '%s\n' "ERROR: failed to refresh console bundle SRI hashes" >&2
             exit 1
         fi
-        patched=1
+        bundle_ready=1
     fi
 done
 
-if [ "$patched" -ne 1 ]; then
-    printf '%s\n' "ERROR: expected Fleetbase console runtime-config flag was not found" >&2
+if [ "$bundle_ready" -ne 1 ]; then
+    printf '%s\n' "ERROR: could not enable runtime config in the Fleetbase console bundle" >&2
     exit 1
 fi
 
