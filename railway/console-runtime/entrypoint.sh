@@ -35,8 +35,21 @@ for asset in "$ASSET_DIR"/@fleetbase/console-*.js; do
 
         hash256="$(openssl dgst -sha256 -binary "$asset" | openssl base64 -A)"
         hash512="$(openssl dgst -sha512 -binary "$asset" | openssl base64 -A)"
-        sed -i "/$asset_name/s|integrity=\\"[^\\"]*\\"|integrity=\\"sha256-$hash256 sha512-$hash512\\"|" "$INDEX_FILE"
-        if ! grep -Fq "integrity=\"sha256-$hash256 sha512-$hash512\"" "$INDEX_FILE"; then
+        sri="sha256-$hash256 sha512-$hash512"
+        if ! awk -v asset="$asset_name" -v sri="$sri" '
+            index($0, asset) {
+                if (sub(/integrity="[^"]*"/, "integrity=\"" sri "\"")) changed++
+            }
+            { print }
+            END { if (changed != 1) exit 1 }
+        ' "$INDEX_FILE" > "$INDEX_FILE.tmp"; then
+            rm -f "$INDEX_FILE.tmp"
+            printf '%s\n' "ERROR: failed to update console bundle SRI hashes" >&2
+            exit 1
+        fi
+        mv "$INDEX_FILE.tmp" "$INDEX_FILE"
+
+        if ! grep -Fq "integrity=\"$sri\"" "$INDEX_FILE"; then
             printf '%s\n' "ERROR: failed to refresh console bundle SRI hashes" >&2
             exit 1
         fi
